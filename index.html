@@ -229,6 +229,7 @@
             </div>
         </div>
 
+        <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
         <script>
             const openLink = document.getElementById("openLink");
             const scanBtn = document.getElementById("scanBtn");
@@ -253,6 +254,8 @@
             let scannerTimer = null;
             let barcodeDetector = null;
             let scannerFailureCount = 0;
+            const isAppleMobile = /iphone|ipad|ipod/i.test(navigator.userAgent || "");
+            const hasJsQr = typeof window.jsQR === "function";
             const locale = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
             const messages = {
                 "zh-CN": {
@@ -276,11 +279,14 @@
                     qrFailed: "扫码识别失败，建议尝试系统浏览器，或直接手动输入 Deeplink。",
                     cameraUnsupported: "当前浏览器不支持摄像头扫码",
                     qrUnsupported: "当前浏览器不支持原生二维码识别，请改用手动输入",
+                    qrLibraryUnsupported: "当前浏览器缺少二维码识别能力，请改用系统浏览器或手动输入",
                     scanning: "正在扫码...",
                     scanStartFailed: "无法启动扫码：",
                     scanClosed: "已关闭扫码",
                     invalidParam: "当前 URL 没有传入正确参数，请参考下方格式或手动输入 Deeplink",
-                    urlFormat: "url格式: "
+                    urlFormat: "url格式: ",
+                    scanningModeNative: "正在使用浏览器原生识别扫码...",
+                    scanningModeCompatible: "正在使用兼容模式扫码，iPhone Safari 识别可能稍慢一些..."
                 },
                 en: {
                     documentTitle: "Deeplink Redirect",
@@ -303,11 +309,14 @@
                     qrFailed: "QR scan failed. Try the system browser or enter the deeplink manually.",
                     cameraUnsupported: "This browser does not support camera scanning.",
                     qrUnsupported: "This browser does not support native QR detection. Please enter the deeplink manually.",
+                    qrLibraryUnsupported: "No QR detection capability is available in this browser. Try the system browser or enter the deeplink manually.",
                     scanning: "Scanning...",
                     scanStartFailed: "Unable to start scanning: ",
                     scanClosed: "Scanning closed",
                     invalidParam: "The current URL does not contain the correct parameter. Refer to the format below or enter a deeplink manually.",
-                    urlFormat: "URL format: "
+                    urlFormat: "URL format: ",
+                    scanningModeNative: "Scanning with the browser's native detector...",
+                    scanningModeCompatible: "Scanning in compatibility mode. Detection may be a bit slower on iPhone Safari..."
                 }
             };
 
@@ -381,22 +390,34 @@
                 scanBtn.style.display = "inline-block";
             }
 
+            async function detectQrCode() {
+                scannerCanvas.width = scannerVideo.videoWidth;
+                scannerCanvas.height = scannerVideo.videoHeight;
+                scannerCanvasContext.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
+
+                if (hasJsQr) {
+                    const imageData = scannerCanvasContext.getImageData(0, 0, scannerCanvas.width, scannerCanvas.height);
+                    const result = window.jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert"
+                    });
+                    return result ? result.data || "" : "";
+                }
+
+                if (!barcodeDetector) {
+                    return "";
+                }
+
+                const codes = await barcodeDetector.detect(scannerCanvas);
+                return codes[0] && codes[0].rawValue ? codes[0].rawValue : "";
+            }
+
             async function scanFrame() {
-                if (!barcodeDetector || !scannerVideo.videoWidth || !scannerVideo.videoHeight) {
+                if (!scannerVideo.videoWidth || !scannerVideo.videoHeight) {
                     return;
                 }
 
                 try {
-                    scannerCanvas.width = scannerVideo.videoWidth;
-                    scannerCanvas.height = scannerVideo.videoHeight;
-                    scannerCanvasContext.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
-
-                    const codes = await barcodeDetector.detect(scannerCanvas);
-                    if (!codes.length) {
-                        return;
-                    }
-
-                    const rawValue = codes[0].rawValue || "";
+                    const rawValue = await detectQrCode();
                     if (!rawValue) {
                         return;
                     }
@@ -423,15 +444,19 @@
                     return;
                 }
 
-                if (!("BarcodeDetector" in window)) {
-                    statusText.textContent = t("qrUnsupported");
+                if (!hasJsQr && !("BarcodeDetector" in window)) {
+                    statusText.textContent = t("qrLibraryUnsupported");
                     return;
                 }
 
                 try {
-                    barcodeDetector = new window.BarcodeDetector({
-                        formats: ["qr_code"]
-                    });
+                    if (!hasJsQr && "BarcodeDetector" in window) {
+                        barcodeDetector = new window.BarcodeDetector({
+                            formats: ["qr_code"]
+                        });
+                    } else {
+                        barcodeDetector = null;
+                    }
                     scannerStream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: {
@@ -446,7 +471,7 @@
                     scanBtn.style.display = "none";
                     stopScanBtn.style.display = "inline-block";
                     scannerHint.textContent = t("scanHint");
-                    statusText.textContent = t("scanning");
+                    statusText.textContent = hasJsQr || isAppleMobile ? t("scanningModeCompatible") : t("scanningModeNative");
                     scannerFailureCount = 0;
 
                     scannerTimer = setInterval(scanFrame, 500);
