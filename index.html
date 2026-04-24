@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Deeplink Redirect</title>
+        <style>
+            :root {
+                --bg: linear-gradient(135deg, #fff8ef 0%, #f5eee3 50%, #eee5d7 100%);
+                --card: rgba(255, 252, 247, 0.96);
+                --text: #2d2116;
+                --muted: #6e5a48;
+                --accent: #a64b2a;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                padding: 20px;
+                font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+                color: var(--text);
+                background: var(--bg);
+            }
+
+            .card {
+                width: min(100%, 680px);
+                padding: 28px 24px;
+                border-radius: 24px;
+                background: var(--card);
+                border: 1px solid rgba(122, 89, 53, 0.14);
+                box-shadow: 0 20px 50px rgba(40, 24, 14, 0.16);
+            }
+
+            h1 {
+                margin: 0 0 10px;
+                font-size: 28px;
+            }
+
+            p {
+                margin: 0 0 14px;
+                color: var(--muted);
+                line-height: 1.7;
+            }
+
+            .actions {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-top: 18px;
+            }
+
+            label {
+                display: block;
+                margin-top: 18px;
+                margin-bottom: 8px;
+                color: var(--muted);
+                font-size: 13px;
+                font-weight: 700;
+            }
+
+            textarea {
+                width: 100%;
+                min-height: 120px;
+                padding: 14px 16px;
+                border: 1px solid rgba(122, 89, 53, 0.14);
+                border-radius: 18px;
+                background: rgba(255, 255, 255, 0.86);
+                color: var(--text);
+                font: inherit;
+                line-height: 1.6;
+                resize: vertical;
+                outline: none;
+            }
+
+            textarea:focus {
+                border-color: rgba(166, 75, 42, 0.65);
+                box-shadow: 0 0 0 4px rgba(166, 75, 42, 0.12);
+            }
+
+            a,
+            button {
+                border: 0;
+                border-radius: 999px;
+                padding: 12px 18px;
+                font: inherit;
+                font-weight: 700;
+                text-decoration: none;
+                cursor: pointer;
+            }
+
+            .primary {
+                color: #fff8f2;
+                background: linear-gradient(135deg, var(--accent) 0%, #ca6a44 100%);
+            }
+
+            .secondary {
+                color: var(--text);
+                background: rgba(122, 89, 53, 0.08);
+            }
+
+            .mono {
+                margin-top: 18px;
+                padding: 14px 16px;
+                border-radius: 18px;
+                background: rgba(255, 255, 255, 0.78);
+                border: 1px solid rgba(122, 89, 53, 0.14);
+                word-break: break-all;
+                font-family: Consolas, "Courier New", monospace;
+                font-size: 13px;
+                line-height: 1.7;
+            }
+
+            .status {
+                margin-top: 16px;
+                font-size: 13px;
+                font-weight: 700;
+                color: var(--muted);
+            }
+
+            .tips {
+                margin-top: 18px;
+                padding: 14px 16px;
+                border-radius: 18px;
+                background: rgba(255, 255, 255, 0.78);
+                border: 1px dashed rgba(166, 75, 42, 0.22);
+                color: var(--muted);
+                line-height: 1.8;
+                font-size: 13px;
+            }
+
+            .scanner {
+                position: fixed;
+                inset: 0;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 18px;
+                background: rgba(26, 18, 12, 0.72);
+                z-index: 1000;
+            }
+
+            .scanner.active {
+                display: flex;
+            }
+
+            .scanner-card {
+                width: min(100%, 520px);
+                padding: 18px;
+                border-radius: 24px;
+                background: rgba(255, 252, 247, 0.98);
+                border: 1px solid rgba(122, 89, 53, 0.14);
+                box-shadow: 0 24px 60px rgba(20, 12, 8, 0.28);
+            }
+
+            .scanner-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                margin-bottom: 12px;
+            }
+
+            .scanner-title {
+                margin: 0;
+                font-size: 16px;
+            }
+
+            .scanner video {
+                width: 100%;
+                border-radius: 14px;
+                background: #000;
+                aspect-ratio: 1 / 1;
+                object-fit: cover;
+            }
+
+            .scanner-hint {
+                margin-top: 10px;
+                color: var(--muted);
+                font-size: 13px;
+                line-height: 1.7;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="card">
+            <h1 id="pageTitle">正在尝试打开 App</h1>
+
+
+            <div class="actions">
+                <a id="openLink" class="primary" href="#">打开 App</a>
+                <button id="scanBtn" class="secondary" type="button">扫描二维码</button>
+                <button id="stopScanBtn" class="secondary" type="button" style="display:none;">关闭扫码</button>
+            </div>
+
+            <div id="status" class="status">正在读取 Deeplink...</div>
+            <div id="deeplinkOutput" class="mono"></div>
+
+
+
+            <label id="deeplinkLabel" for="deeplinkInput">手动输入 Deeplink</label>
+            <textarea id="deeplinkInput" spellcheck="false" placeholder="在此输入您的 Deeplink..."></textarea>
+
+            <div class="tips" id="urlTips">
+                <span id="tipsText">这个页面会自动尝试拉起你的 Deeplink, 如果浏览器没有自动打开, 请点击下面的按钮手动触发。</span>
+                <br />
+                <br />
+                <span style="word-break:break-all;" id="exampleUrl">
+                    ?deeplink=YOUR_DEEPLINK_HERE
+                </span>
+            </div>
+
+            <div class="scanner" id="scannerPanel">
+                <div class="scanner-card">
+                    <div class="scanner-head">
+                        <h3 id="scannerTitle" class="scanner-title">扫描二维码</h3>
+                        <button id="scannerCloseBtn" class="secondary" type="button">关闭</button>
+                    </div>
+                    <video id="scannerVideo" autoplay playsinline muted></video>
+                    <div class="scanner-hint" id="scannerHint">请把二维码放到画面中央，识别后会自动填入 Deeplink 输入框。</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const openLink = document.getElementById("openLink");
+            const scanBtn = document.getElementById("scanBtn");
+            const stopScanBtn = document.getElementById("stopScanBtn");
+            const statusText = document.getElementById("status");
+            const deeplinkOutput = document.getElementById("deeplinkOutput");
+            const deeplinkInput = document.getElementById("deeplinkInput");
+            const scannerPanel = document.getElementById("scannerPanel");
+            const scannerVideo = document.getElementById("scannerVideo");
+            const scannerHint = document.getElementById("scannerHint");
+            const scannerCloseBtn = document.getElementById("scannerCloseBtn");
+            const pageTitle = document.getElementById("pageTitle");
+            const deeplinkLabel = document.getElementById("deeplinkLabel");
+            const tipsText = document.getElementById("tipsText");
+            const scannerTitle = document.getElementById("scannerTitle");
+            const exampleUrl = document.getElementById("exampleUrl");
+            const scannerCanvas = document.createElement("canvas");
+            const scannerCanvasContext = scannerCanvas.getContext("2d", {
+                willReadFrequently: true
+            });
+            let scannerStream = null;
+            let scannerTimer = null;
+            let barcodeDetector = null;
+            let scannerFailureCount = 0;
+            const locale = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+            const messages = {
+                "zh-CN": {
+                    documentTitle: "Deeplink Redirect",
+                    pageTitle: "正在尝试打开 App",
+                    openApp: "打开 App",
+                    scanQr: "扫描二维码",
+                    stopScan: "关闭扫码",
+                    close: "关闭",
+                    loadingDeeplink: "正在读取 Deeplink...",
+                    manualInput: "手动输入 Deeplink",
+                    inputPlaceholder: "在此输入您的 Deeplink...",
+                    tipsText: "这个页面会自动尝试拉起你的 Deeplink, 如果浏览器没有自动打开, 请点击下面的按钮手动触发。",
+                    scanHint: "请把二维码放到画面中央，识别后会自动填入 Deeplink 输入框。",
+                    noDeeplink: "未找到可用的 deeplink，请检查 URL 参数或手动输入",
+                    openingApp: "正在尝试打开 App...",
+                    invalidCurrentUrl: "当前 URL 没有传入有效的 deeplink 参数",
+                    qrRecognized: "已识别二维码内容，请点击“打开 App”或“再次尝试”",
+                    qrRecognizedHint: "已识别成功，内容已填入输入框。",
+                    qrCompatibilityRetry: "当前浏览器扫码兼容性有限，正在继续尝试识别...",
+                    qrFailed: "扫码识别失败，建议尝试系统浏览器，或直接手动输入 Deeplink。",
+                    cameraUnsupported: "当前浏览器不支持摄像头扫码",
+                    qrUnsupported: "当前浏览器不支持原生二维码识别，请改用手动输入",
+                    scanning: "正在扫码...",
+                    scanStartFailed: "无法启动扫码：",
+                    scanClosed: "已关闭扫码",
+                    invalidParam: "当前 URL 没有传入正确参数，请参考下方格式或手动输入 Deeplink",
+                    urlFormat: "url格式: "
+                },
+                en: {
+                    documentTitle: "Deeplink Redirect",
+                    pageTitle: "Trying to Open the App",
+                    openApp: "Open App",
+                    scanQr: "Scan QR Code",
+                    stopScan: "Stop Scanning",
+                    close: "Close",
+                    loadingDeeplink: "Reading deeplink...",
+                    manualInput: "Enter Deeplink Manually",
+                    inputPlaceholder: "Enter your deeplink here...",
+                    tipsText: "This page will try to open your deeplink automatically. If the browser does not open it, use the button below to trigger it manually.",
+                    scanHint: "Place the QR code in the center of the screen. Once detected, it will be filled into the deeplink input automatically.",
+                    noDeeplink: "No valid deeplink was found. Check the URL parameter or enter one manually.",
+                    openingApp: "Trying to open the app...",
+                    invalidCurrentUrl: "No valid deeplink parameter was found in the current URL.",
+                    qrRecognized: "QR code detected. Click \"Open App\" or try again.",
+                    qrRecognizedHint: "Recognized successfully. The content has been filled into the input box.",
+                    qrCompatibilityRetry: "QR scanning support is limited in this browser. Still trying to detect...",
+                    qrFailed: "QR scan failed. Try the system browser or enter the deeplink manually.",
+                    cameraUnsupported: "This browser does not support camera scanning.",
+                    qrUnsupported: "This browser does not support native QR detection. Please enter the deeplink manually.",
+                    scanning: "Scanning...",
+                    scanStartFailed: "Unable to start scanning: ",
+                    scanClosed: "Scanning closed",
+                    invalidParam: "The current URL does not contain the correct parameter. Refer to the format below or enter a deeplink manually.",
+                    urlFormat: "URL format: "
+                }
+            };
+
+            function t(key) {
+                return (messages[locale] && messages[locale][key]) || messages.en[key] || key;
+            }
+
+            function applyTranslations() {
+                document.documentElement.lang = locale;
+                document.title = t("documentTitle");
+                pageTitle.textContent = t("pageTitle");
+                openLink.textContent = t("openApp");
+                scanBtn.textContent = t("scanQr");
+                stopScanBtn.textContent = t("stopScan");
+                scannerCloseBtn.textContent = t("close");
+                deeplinkLabel.textContent = t("manualInput");
+                deeplinkInput.placeholder = t("inputPlaceholder");
+                tipsText.textContent = t("tipsText");
+                scannerTitle.textContent = t("scanQr");
+                scannerHint.textContent = t("scanHint");
+                statusText.textContent = t("loadingDeeplink");
+            }
+
+            function getDeeplinkFromQuery() {
+                const url = new URL(window.location.href);
+                return url.searchParams.get("deeplink") || "";
+            }
+
+            function buildExampleUrl() {
+                const url = new URL(window.location.href);
+                url.search = "";
+                url.searchParams.set("deeplink", "YOUR_DEEPLINK_HERE");
+                return url.toString();
+            }
+
+            function openDeeplink(deeplink) {
+                if (!deeplink) {
+                    statusText.textContent = t("noDeeplink");
+                    return;
+                }
+
+                statusText.textContent = t("openingApp");
+                window.location.href = deeplink;
+            }
+
+            function resolveCurrentDeeplink() {
+                return deeplinkInput.value.trim() || getDeeplinkFromQuery();
+            }
+
+            function updateDeeplinkUi(deeplink) {
+                deeplinkOutput.textContent = deeplink || t("invalidCurrentUrl");
+                openLink.href = deeplink || "#";
+            }
+
+            function stopScanner() {
+                if (scannerTimer) {
+                    clearInterval(scannerTimer);
+                    scannerTimer = null;
+                }
+
+                if (scannerStream) {
+                    for (const track of scannerStream.getTracks()) {
+                        track.stop();
+                    }
+                    scannerStream = null;
+                }
+
+                scannerVideo.srcObject = null;
+                scannerPanel.classList.remove("active");
+                stopScanBtn.style.display = "none";
+                scanBtn.style.display = "inline-block";
+            }
+
+            async function scanFrame() {
+                if (!barcodeDetector || !scannerVideo.videoWidth || !scannerVideo.videoHeight) {
+                    return;
+                }
+
+                try {
+                    scannerCanvas.width = scannerVideo.videoWidth;
+                    scannerCanvas.height = scannerVideo.videoHeight;
+                    scannerCanvasContext.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
+
+                    const codes = await barcodeDetector.detect(scannerCanvas);
+                    if (!codes.length) {
+                        return;
+                    }
+
+                    const rawValue = codes[0].rawValue || "";
+                    if (!rawValue) {
+                        return;
+                    }
+
+                    deeplinkInput.value = rawValue;
+                    updateDeeplinkUi(rawValue);
+                    statusText.textContent = t("qrRecognized");
+                    scannerHint.textContent = t("qrRecognizedHint");
+                    scannerFailureCount = 0;
+                    stopScanner();
+                } catch (error) {
+                    scannerFailureCount += 1;
+                    if (scannerFailureCount <= 3) {
+                        scannerHint.textContent = t("qrCompatibilityRetry");
+                    } else {
+                        scannerHint.textContent = t("qrFailed");
+                    }
+                }
+            }
+
+            async function startScanner() {
+                if (!("mediaDevices" in navigator) || !navigator.mediaDevices.getUserMedia) {
+                    statusText.textContent = t("cameraUnsupported");
+                    return;
+                }
+
+                if (!("BarcodeDetector" in window)) {
+                    statusText.textContent = t("qrUnsupported");
+                    return;
+                }
+
+                try {
+                    barcodeDetector = new window.BarcodeDetector({
+                        formats: ["qr_code"]
+                    });
+                    scannerStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: {
+                                ideal: "environment"
+                            }
+                        },
+                        audio: false
+                    });
+
+                    scannerVideo.srcObject = scannerStream;
+                    scannerPanel.classList.add("active");
+                    scanBtn.style.display = "none";
+                    stopScanBtn.style.display = "inline-block";
+                    scannerHint.textContent = t("scanHint");
+                    statusText.textContent = t("scanning");
+                    scannerFailureCount = 0;
+
+                    scannerTimer = setInterval(scanFrame, 500);
+                } catch (error) {
+                    stopScanner();
+                    statusText.textContent = t("scanStartFailed") + error.message;
+                }
+            }
+
+            applyTranslations();
+            const deeplink = getDeeplinkFromQuery();
+            deeplinkInput.value = deeplink;
+            updateDeeplinkUi(deeplink);
+            exampleUrl.textContent = t("urlFormat") + buildExampleUrl();
+            openLink.href = deeplink || "#";
+            openLink.addEventListener("click", (event) => {
+                const currentDeeplink = resolveCurrentDeeplink();
+                if (!currentDeeplink) {
+                    event.preventDefault();
+                    return;
+                }
+                openLink.href = currentDeeplink;
+                openDeeplink(currentDeeplink);
+            });
+            scanBtn.addEventListener("click", startScanner);
+            stopScanBtn.addEventListener("click", () => {
+                stopScanner();
+                statusText.textContent = t("scanClosed");
+            });
+            scannerCloseBtn.addEventListener("click", () => {
+                stopScanner();
+                statusText.textContent = t("scanClosed");
+            });
+            scannerPanel.addEventListener("click", (event) => {
+                if (event.target === scannerPanel) {
+                    stopScanner();
+                    statusText.textContent = t("scanClosed");
+                }
+            });
+            deeplinkInput.addEventListener("input", () => {
+                const currentDeeplink = resolveCurrentDeeplink();
+                updateDeeplinkUi(currentDeeplink);
+            });
+
+            if (deeplink) {
+                setTimeout(() => {
+                    openDeeplink(deeplink);
+                }, 120);
+            } else {
+                statusText.textContent = t("invalidParam");
+            }
+
+            window.addEventListener("beforeunload", stopScanner);
+        </script>
+    </body>
+
+</html>
