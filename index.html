@@ -229,6 +229,9 @@
             </div>
         </div>
 
+        <!-- Cloudflare Web Analytics -->
+        <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"c8fa7fc4aca64275844471150698a57c"}'></script>
+        <!-- End Cloudflare Web Analytics -->
         <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
         <script>
             const openLink = document.getElementById("openLink");
@@ -519,7 +522,7 @@
             if (deeplink) {
                 setTimeout(() => {
                     openDeeplink(deeplink);
-                }, 120);
+                }, 500);
             } else {
                 statusText.textContent = t("invalidParam");
             }
